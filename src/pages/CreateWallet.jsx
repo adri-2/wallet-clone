@@ -76,306 +76,120 @@ export default function CreateWallet() {
   };
 
   return (
-    <div
-      className="flex items-center
-        justify-center
-        min-h-screen
-        bg-violet-500
-        p-4
-      "
-    >
-      <div
-        className="
-          w-full
-          max-w-md
-          bg-white
-          rounded-xl
-          shadow-lg
-          p-6
-        "
-      >
-        <h1
-          className="
-            text-2xl
-            font-bold
-            text-center
-            mb-6
-          "
-        >
-          SANGO WALLET
-        </h1>
+    <div className="flex flex-col gap-6 p-4 pb-8">
+      <h1 className="text-3xl font-bold text-center bg-gradient-to-r from-violet-600 to-pink-500 bg-clip-text text-transparent">
+        SANGO WALLET
+      </h1>
 
-        {/* ===================== */}
-        {/* STEP INDICATOR */}
-        {/* ===================== */}
-
-        <div
-          className="
-            flex
-            justify-center
-            gap-2
-            mb-6
-          "
-        >
-          {[1, 2, 3].map((item) => (
-            <div
-              key={item}
-              className={`
-                w-8
-                h-8
-                rounded-full
-                flex
-                items-center
-                justify-center
-                text-white
-                font-bold
-
-                ${step >= item ? "bg-violet-500" : "bg-gray-300"}
-              `}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-
-        {/* ===================== */}
-        {/* STEP 1 */}
-        {/* ===================== */}
-
-        {step === 1 && (
+      <div className="flex justify-center gap-2">
+        {[1, 2, 3].map((item) => (
           <div
-            className="
-              flex
-              flex-col
-              gap-4
-              items-center
-            "
+            key={item}
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition ${
+              step >= item ? "bg-violet-600" : "bg-gray-300"
+            }`}
           >
-            <p className="text-center">
-              Bienvenue sur SANGOWALLET. Créez un wallet multi-blockchain
-              sécurisé.
-            </p>
-
-            <button
-              onClick={handleGenerateSeed}
-              className="
-                bg-violet-500
-                hover:bg-violet-600
-                text-white
-                font-bold
-                py-2
-                px-7
-                rounded-lg
-              "
-            >
-              Générer les 12 mots
-            </button>
-
-            <button
-              onClick={() => navigate("/import")}
-              className="
-                bg-violet-500
-                hover:bg-violet-600
-                text-white
-                font-bold
-                py-2
-                px-6
-                rounded-lg
-              "
-            >
-              Importer les 12 mots
-            </button>
+            {item}
           </div>
-        )}
-
-        {/* ===================== */}
-        {/* STEP 2 */}
-        {/* ===================== */}
-
-        {step === 2 && (
-          <div
-            className="
-              flex
-              flex-col
-              gap-4
-            "
-          >
-            <h2
-              className="
-                text-lg
-                font-bold
-                text-center
-              "
-            >
-              Sauvegardez vos 12 mots
-            </h2>
-
-            <div
-              className="
-                grid
-                grid-cols-3
-                gap-2
-              "
-            >
-              {seedPhrase.split(" ").map((word, index) => (
-                <div
-                  key={index}
-                  className="
-                    bg-gray-100
-                    p-2
-                    rounded
-                    text-center
-                    font-mono
-                  "
-                >
-                  {index + 1}. {word}
-                </div>
-              ))}
-            </div>
-
-            <div
-              className="
-                bg-yellow-100
-                text-yellow-800
-                p-3
-                rounded
-                text-sm
-              "
-            >
-              ⚠️ Ne partagez jamais ces mots. Ils permettent d’accéder à vos
-              cryptos.
-            </div>
-
-            <div
-              className="
-                flex
-                justify-between
-              "
-            >
-              <button
-                onClick={() => setStep(1)}
-                className="
-                  bg-gray-300
-                  px-4
-                  py-2
-                  rounded
-                "
-              >
-                Retour
-              </button>
-
-              <button
-                onClick={() => setStep(3)}
-                className="
-                  bg-violet-500
-                  hover:bg-violet-600
-                  text-white
-                  px-4
-                  py-2
-                  rounded
-                "
-              >
-                Continuer
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ===================== */}
-        {/* STEP 3 */}
-        {/* ===================== */}
-
-        {step === 3 && (
-          <div
-            className="
-              flex
-              flex-col
-              gap-4
-            "
-          >
-            <h2
-              className="
-                text-lg
-                font-bold
-                text-center
-              "
-            >
-              Sécuriser le wallet
-            </h2>
-
-            <input
-              type="password"
-              placeholder="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="
-                border
-                p-3
-                rounded
-              "
-            />
-
-            <input
-              type="password"
-              placeholder="Confirmer mot de passe"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="
-                border
-                p-3
-                rounded
-              "
-            />
-
-            {error && (
-              <div
-                className="
-                  bg-red-100
-                  text-red-700
-                  p-2
-                  rounded
-                "
-              >
-                {error}
-              </div>
-            )}
-
-            <div
-              className="
-                flex
-                justify-between
-              "
-            >
-              <button
-                onClick={() => setStep(2)}
-                className="
-                  bg-gray-300
-                  px-4
-                  py-2
-                  rounded
-                "
-              >
-                Retour
-              </button>
-
-              <button
-                onClick={handleSaveWallet}
-                className="
-                  bg-green-500
-                  hover:bg-green-600
-                  text-white
-                  font-bold
-                  px-4
-                  py-2
-                  rounded
-                "
-              >
-                Créer Wallet
-              </button>
-            </div>
-          </div>
-        )}
+        ))}
       </div>
+
+      {step === 1 && (
+        <div className="flex flex-col gap-4 items-center">
+          <p className="text-center text-gray-700">
+            Bienvenue sur SANGOWALLET. Créez un wallet multi-blockchain
+            sécurisé.
+          </p>
+          <button
+            onClick={handleGenerateSeed}
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 rounded-lg transition"
+          >
+            Générer les 12 mots
+          </button>
+          <button
+            onClick={() => navigate("/import")}
+            className="w-full bg-gray-200 hover:bg-gray-300 text-black font-bold py-3 rounded-lg transition"
+          >
+            Importer les 12 mots
+          </button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="text-xl font-bold text-center">
+            Sauvegardez vos 12 mots
+          </h2>
+          <div className="grid grid-cols-3 gap-2">
+            {seedPhrase.split(" ").map((word, index) => (
+              <div
+                key={index}
+                className="bg-gray-100 p-3 rounded text-center font-mono text-sm border border-gray-200"
+              >
+                <div className="text-xs text-gray-500">{index + 1}</div>
+                <div className="font-bold">{word}</div>
+              </div>
+            ))}
+          </div>
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg text-sm">
+            ⚠️ Ne partagez jamais ces mots. Ils permettent d’accéder à vos
+            cryptos.
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep(1)}
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-semibold transition"
+            >
+              Retour
+            </button>
+            <button
+              onClick={() => setStep(3)}
+              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-lg font-semibold transition"
+            >
+              Continuer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="text-xl font-bold text-center">Sécuriser le wallet</h2>
+          <input
+            type="password"
+            placeholder="Mot de passe"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="border border-gray-300 p-3 rounded-lg bg-gray-50"
+          />
+          <input
+            type="password"
+            placeholder="Confirmer mot de passe"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="border border-gray-300 p-3 rounded-lg bg-gray-50"
+          />
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep(2)}
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-semibold transition"
+            >
+              Retour
+            </button>
+            <button
+              onClick={handleSaveWallet}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold transition"
+            >
+              Créer Wallet
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

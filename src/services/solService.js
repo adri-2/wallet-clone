@@ -7,12 +7,29 @@ import {
   Keypair,
 } from "@solana/web3.js";
 
-const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC_URLS = [
+  "https://solana-rpc.publicnode.com",
+  "https://api.mainnet-beta.solana.com",
+];
+
+const getWorkingConnection = async () => {
+  for (const rpcUrl of SOLANA_RPC_URLS) {
+    try {
+      const connection = new Connection(rpcUrl);
+      await connection.getLatestBlockhash();
+      return connection;
+    } catch (error) {
+      console.error(`Solana RPC indisponible: ${rpcUrl}`, error);
+    }
+  }
+
+  throw new Error("Aucun RPC Solana disponible");
+};
 
 // Balance SOL
 export const getSolBalance = async (address) => {
   try {
-    const connection = new Connection(SOLANA_RPC);
+    const connection = await getWorkingConnection();
     const publicKey = new PublicKey(address);
     const balance = await connection.getBalance(publicKey);
     return (balance / LAMPORTS_PER_SOL).toString();
@@ -24,7 +41,7 @@ export const getSolBalance = async (address) => {
 
 // Envoyer SOL
 export const sendSol = async (secretKeyHex, toAddress, amountSol) => {
-  const connection = new Connection(SOLANA_RPC);
+  const connection = await getWorkingConnection();
   const fromKeypair = Keypair.fromSecretKey(Buffer.from(secretKeyHex, "hex"));
   const toPublicKey = new PublicKey(toAddress);
 

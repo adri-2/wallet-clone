@@ -39,41 +39,16 @@ export default function ImportWallet() {
   };
 
   return (
-    <div
-      className="flex items-center
-        justify-center
-        min-h-screen
-        bg-violet-500
-        p-4
-      "
-    >
-      <div
-        className="
-          w-full
-          max-w-md
-          bg-white
-          rounded-xl
-          shadow-lg
-          p-6
-        "
-      >
-        <h1
-          className="
-            text-2xl
-            font-bold
-            text-center
-            mb-6
-          "
-        >
-          🔑 Importer un wallet
-        </h1>
+    <div className="flex flex-col gap-6 p-4 pb-8">
+      <h1 className="text-3xl font-bold text-center">🔑 Importer un wallet</h1>
 
+      <div className="flex flex-col gap-4">
         <textarea
-          rows={4}
+          rows={5}
           placeholder="Collez vos 12 mots ici..."
           value={seedInput}
           onChange={(e) => setSeedInput(e.target.value)}
-          className="border p-3 rounded w-full font-mono mb-3"
+          className="border border-gray-300 p-3 rounded-lg font-mono bg-gray-50 resize-none"
         />
 
         <input
@@ -81,25 +56,25 @@ export default function ImportWallet() {
           placeholder="Nouveau mot de passe wallet"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="border p-3 rounded w-full mb-3"
+          className="border border-gray-300 p-3 rounded-lg bg-gray-50"
         />
 
         {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded mb-3">
+          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
             {error}
           </div>
         )}
 
         <div className="flex gap-3">
           <button
-            className="bg-violet-500 hover:bg-violet-600 text-white font-bold py-2 px-4 rounded-lg flex-1"
+            className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 rounded-lg transition"
             onClick={handleImport}
           >
             Restaurer mon wallet
           </button>
 
           <button
-            className="bg-gray-300 hover:bg-gray-400 text-black font-bold py-2 px-4 rounded-lg"
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-black font-bold py-3 rounded-lg transition"
             onClick={() => navigate("/create")}
           >
             Créer

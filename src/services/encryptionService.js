@@ -11,7 +11,13 @@ const emitSessionChange = () => {
 };
 
 if (typeof window !== "undefined") {
-  sessionStorage.removeItem(SESSION_KEY);
+  try {
+    const storedSession = sessionStorage.getItem(SESSION_KEY);
+    sessionWallet = storedSession ? JSON.parse(storedSession) : null;
+  } catch {
+    sessionWallet = null;
+    sessionStorage.removeItem(SESSION_KEY);
+  }
 }
 
 // Sauvegarder wallet chiffré
@@ -46,6 +52,9 @@ export const walletExists = () => {
 // Gestion de session
 export const setSessionWallet = (walletData) => {
   sessionWallet = walletData;
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(walletData));
+  }
   emitSessionChange();
 };
 
@@ -55,13 +64,17 @@ export const getSessionWallet = () => {
 
 export const clearSession = () => {
   sessionWallet = null;
-  sessionStorage.removeItem(SESSION_KEY);
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
   emitSessionChange();
 };
 
 export const deleteWallet = () => {
   localStorage.removeItem(STORAGE_KEY);
   sessionWallet = null;
-  sessionStorage.removeItem(SESSION_KEY);
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
   emitSessionChange();
 };

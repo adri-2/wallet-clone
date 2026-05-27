@@ -1,16 +1,34 @@
 import { ethers } from "ethers";
 
-const ETH_RPC = "https://cloudflare-eth.com";
+const ETH_RPC_URLS = [
+  "https://ethereum-rpc.publicnode.com",
+  "https://rpc.ankr.com/eth",
+  "https://cloudflare-eth.com",
+];
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const USDT_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function transfer(address to, uint256 amount) returns (bool)",
 ];
 
+const getWorkingProvider = async () => {
+  for (const rpcUrl of ETH_RPC_URLS) {
+    try {
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      await provider.getBlockNumber();
+      return provider;
+    } catch (error) {
+      console.error(`ETH RPC indisponible: ${rpcUrl}`, error);
+    }
+  }
+
+  throw new Error("Aucun RPC Ethereum disponible");
+};
+
 // Balance ETH
 export const getEthBalance = async (address) => {
   try {
-    const provider = new ethers.JsonRpcProvider(ETH_RPC);
+    const provider = await getWorkingProvider();
     const balanceWei = await provider.getBalance(address);
     return ethers.formatEther(balanceWei);
   } catch (error) {
@@ -22,7 +40,7 @@ export const getEthBalance = async (address) => {
 // Balance USDT
 export const getUsdtBalance = async (address) => {
   try {
-    const provider = new ethers.JsonRpcProvider(ETH_RPC);
+    const provider = await getWorkingProvider();
     const contract = new ethers.Contract(USDT_CONTRACT, USDT_ABI, provider);
     const balance = await contract.balanceOf(address);
     return ethers.formatUnits(balance, 6);
@@ -34,7 +52,7 @@ export const getUsdtBalance = async (address) => {
 
 // Envoyer ETH
 export const sendEth = async (privateKey, toAddress, amountEth) => {
-  const provider = new ethers.JsonRpcProvider(ETH_RPC);
+  const provider = await getWorkingProvider();
   const wallet = new ethers.Wallet(privateKey, provider);
 
   const tx = await wallet.sendTransaction({
@@ -48,7 +66,7 @@ export const sendEth = async (privateKey, toAddress, amountEth) => {
 
 // Envoyer USDT
 export const sendUsdt = async (privateKey, toAddress, amountUsdt) => {
-  const provider = new ethers.JsonRpcProvider(ETH_RPC);
+  const provider = await getWorkingProvider();
   const wallet = new ethers.Wallet(privateKey, provider);
   const contract = new ethers.Contract(USDT_CONTRACT, USDT_ABI, wallet);
 
