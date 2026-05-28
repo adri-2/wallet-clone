@@ -1,3 +1,4 @@
+//services/walletService.js
 import { generateMnemonic, mnemonicToSeedSync } from "bip39";
 import { ethers } from "ethers";
 import * as bitcoin from "bitcoinjs-lib";

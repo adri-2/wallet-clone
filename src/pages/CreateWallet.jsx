@@ -6,7 +6,13 @@ import {
   deriveAllWallets,
 } from "../services/walletService";
 
-import { saveWallet, setSessionWallet } from "../services/encryptionService";
+import {
+  saveWallet,
+  setSessionWallet,
+  setSessionPassword,
+  getSessionPassword,
+  walletExists,
+} from "../services/encryptionService";
 
 export default function CreateWallet() {
   const [step, setStep] = useState(1);
@@ -20,6 +26,8 @@ export default function CreateWallet() {
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
+  const masterPassword = getSessionPassword();
+  const needsInitialPassword = !masterPassword && !walletExists();
 
   // =========================
   // STEP 1
@@ -42,14 +50,22 @@ export default function CreateWallet() {
   const handleSaveWallet = () => {
     setError("");
 
+    const effectivePassword = masterPassword || password;
+
     // Validation
-    if (password !== confirmPassword) {
+    if (!effectivePassword) {
+      setError("Définissez un mot de passe maître pour continuer");
+
+      return;
+    }
+
+    if (!masterPassword && password !== confirmPassword) {
       setError("Les mots de passe ne correspondent pas");
 
       return;
     }
 
-    if (password.length < 6) {
+    if (!masterPassword && password.length < 6) {
       setError("Minimum 6 caractères");
 
       return;
@@ -60,14 +76,26 @@ export default function CreateWallet() {
 
       const walletData = {
         seedPhrase,
+        address: wallets.ethAddress,
 
         ...wallets,
 
         createdAt: new Date().toISOString(),
       };
 
-      saveWallet(walletData, password);
-      setSessionWallet(walletData);
+      const result = saveWallet(walletData, effectivePassword);
+
+      if (!result.success) {
+        setError(result.message || "Erreur création wallet");
+
+        return;
+      }
+
+      setSessionWallet({
+        ...walletData,
+        ...result.wallet,
+      });
+      setSessionPassword(effectivePassword);
 
       navigate("/dashboard");
     } catch {
@@ -77,7 +105,7 @@ export default function CreateWallet() {
 
   return (
     <div className="flex flex-col gap-6 p-4 pb-8">
-      <h1 className="text-3xl font-bold text-center bg-gradient-to-r from-violet-600 to-pink-500 bg-clip-text text-transparent">
+      <h1 className="text-3xl font-bold text-center bg-linear-to-r from-violet-600 to-pink-500 bg-clip-text text-transparent">
         SANGO WALLET
       </h1>
 
@@ -155,20 +183,37 @@ export default function CreateWallet() {
       {step === 3 && (
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-bold text-center">Sécuriser le wallet</h2>
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border border-gray-300 p-3 rounded-lg bg-gray-50"
-          />
-          <input
-            type="password"
-            placeholder="Confirmer mot de passe"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="border border-gray-300 p-3 rounded-lg bg-gray-50"
-          />
+          {masterPassword ? (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded-lg text-sm">
+              Le mot de passe maître est déjà défini. Il sera utilisé pour ce
+              wallet.
+            </div>
+          ) : (
+            <>
+              {!needsInitialPassword && (
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg text-sm">
+                  Déverrouille d'abord le dashboard pour réutiliser le mot de
+                  passe maître existant.
+                </div>
+              )}
+              <input
+                type="password"
+                placeholder="Mot de passe maître"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="border border-gray-300 p-3 rounded-lg bg-gray-50"
+                disabled={!needsInitialPassword}
+              />
+              <input
+                type="password"
+                placeholder="Confirmer mot de passe"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="border border-gray-300 p-3 rounded-lg bg-gray-50"
+                disabled={!needsInitialPassword}
+              />
+            </>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
               {error}

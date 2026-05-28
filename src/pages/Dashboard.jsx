@@ -4,7 +4,10 @@ import {
   loadWallet,
   getSessionWallet,
   setSessionWallet,
+  getSessionPassword,
+  setSessionPassword,
 } from "../services/encryptionService";
+import { getAllWallets, switchWallet } from "../services/walletManagerService";
 import { getEthBalance, getUsdtBalance } from "../services/ethService";
 import { getSolBalance } from "../services/solService";
 import { getCryptoPrices } from "../services/priceService";
@@ -48,11 +51,19 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const [prices, setPrices] = useState({ btc: 0, eth: 0, sol: 0, usdt: 0 });
+  const [walletOptions, setWalletOptions] = useState([]);
 
   useEffect(() => {
     const syncSession = () => {
       const sessionWallet = getSessionWallet();
       setWalletData(sessionWallet);
+      const sessionPassword = getSessionPassword();
+
+      if (sessionPassword) {
+        setWalletOptions(getAllWallets(sessionPassword) || []);
+      } else {
+        setWalletOptions([]);
+      }
 
       if (!sessionWallet) {
         setBalances({});
@@ -78,8 +89,30 @@ export default function Dashboard() {
     }
     setWalletData(data);
     setSessionWallet(data);
+    setSessionPassword(password);
+    setWalletOptions(getAllWallets(password) || []);
     await fetchBalances(data);
     setLoading(false);
+  };
+
+  const handleSwitchWallet = (walletId) => {
+    const sessionPassword = getSessionPassword() || password;
+
+    if (!sessionPassword) {
+      setError("Entrez d'abord le mot de passe maître pour changer de wallet");
+      return;
+    }
+
+    const nextWallet = switchWallet(sessionPassword, walletId);
+
+    if (!nextWallet) {
+      setError("Impossible de changer de wallet");
+      return;
+    }
+
+    setError("");
+    setPassword(sessionPassword);
+    setWalletData(nextWallet);
   };
 
   const fetchBalances = async (data) => {
@@ -168,6 +201,33 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
+      <div className="bg-white/90 rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-gray-700">
+            Changer de wallet
+          </label>
+          <select
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            value={walletData?.id || ""}
+            onChange={(e) => handleSwitchWallet(e.target.value)}
+            disabled={walletOptions.length === 0}
+          >
+            {walletOptions.length === 0 ? (
+              <option value="">Aucun wallet disponible</option>
+            ) : (
+              walletOptions.map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>
+                  {wallet.name}
+                </option>
+              ))
+            )}
+          </select>
+          <p className="text-xs text-gray-500">
+            Sélectionne un wallet pour basculer immédiatement dessus.
+          </p>
+        </div>
+      </div>
+
       <div className="bg-linear-to-r from-violet-600 to-pink-500 text-white p-6 rounded-xl shadow-lg">
         <p className="text-sm opacity-90 mb-2">Solde Total</p>
         <h1 className="text-4xl font-bold">${totalUsd.toFixed(2)}</h1>

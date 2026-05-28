@@ -4,20 +4,36 @@ import {
   deriveAllWallets,
   validateSeedPhrase,
 } from "../services/walletService";
-import { saveWallet, setSessionWallet } from "../services/encryptionService";
+import {
+  saveWallet,
+  setSessionWallet,
+  setSessionPassword,
+  getSessionPassword,
+  walletExists,
+} from "../services/encryptionService";
 
 export default function ImportWallet() {
   const [seedInput, setSeedInput] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const masterPassword = getSessionPassword();
+  const needsInitialPassword = !masterPassword && !walletExists();
 
   const handleImport = () => {
     if (!validateSeedPhrase(seedInput)) {
       setError("Veuillez entrer exactement 12 mots");
       return;
     }
-    if (password.length < 6) {
+
+    const effectivePassword = masterPassword || password;
+
+    if (!effectivePassword) {
+      setError("Définissez un mot de passe maître pour continuer");
+      return;
+    }
+
+    if (!masterPassword && password.length < 6) {
       setError("Le mot de passe doit faire au moins 6 caractères");
       return;
     }
@@ -26,12 +42,24 @@ export default function ImportWallet() {
       const wallets = deriveAllWallets(seedInput);
       const walletData = {
         seedPhrase: seedInput,
+        address: wallets.ethAddress,
         ...wallets,
-        importedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       };
 
-      saveWallet(walletData, password);
-      setSessionWallet(walletData);
+      const result = saveWallet(walletData, effectivePassword);
+
+      if (!result.success) {
+        setError(result.message || "Erreur import wallet");
+
+        return;
+      }
+
+      setSessionWallet({
+        ...walletData,
+        ...result.wallet,
+      });
+      setSessionPassword(effectivePassword);
       navigate("/dashboard");
     } catch {
       setError("Seed phrase invalide");
@@ -51,13 +79,28 @@ export default function ImportWallet() {
           className="border border-gray-300 p-3 rounded-lg font-mono bg-gray-50 resize-none"
         />
 
-        <input
-          type="password"
-          placeholder="Nouveau mot de passe wallet"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="border border-gray-300 p-3 rounded-lg bg-gray-50"
-        />
+        {masterPassword ? (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 p-4 rounded-lg text-sm">
+            Le mot de passe maître actuel sera utilisé pour ce wallet.
+          </div>
+        ) : (
+          <>
+            {!needsInitialPassword && (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg text-sm">
+                Déverrouille d'abord le dashboard pour réutiliser le mot de
+                passe maître existant.
+              </div>
+            )}
+            <input
+              type="password"
+              placeholder="Mot de passe maître"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="border border-gray-300 p-3 rounded-lg bg-gray-50"
+              disabled={!needsInitialPassword}
+            />
+          </>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
