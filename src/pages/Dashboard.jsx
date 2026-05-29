@@ -34,7 +34,13 @@ const CryptoCard = ({
     onClick={onClick}
   >
     <div className="flex items-center gap-3">
-      <img src={logo} alt={symbol} className="w-12 h-12 rounded-full" />
+      {logo ? (
+        <img src={logo} alt={symbol} className="w-12 h-12 rounded-full" />
+      ) : (
+        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+          {symbol?.slice(0, 2) || "?"}
+        </div>
+      )}
       <div>
         <h3 className="font-bold text-sm text-gray-900">{name}</h3>
         <p className="text-xs text-gray-600">
@@ -62,31 +68,6 @@ export default function Dashboard() {
     () => getCurrentNetwork().id,
   );
   const [customTokens, setCustomTokens] = useState([]);
-
-  useEffect(() => {
-    const syncSession = () => {
-      const sessionWallet = getSessionWallet();
-      setWalletData(sessionWallet);
-
-      if (!sessionWallet) {
-        setBalances({});
-        setError("");
-        setPassword("");
-      }
-    };
-
-    const syncNetwork = () => {
-      setCurrentNetworkId(getCurrentNetwork().id);
-    };
-
-    window.addEventListener("sangowallet-session-change", syncSession);
-    window.addEventListener("sangowallet-network-change", syncNetwork);
-
-    return () => {
-      window.removeEventListener("sangowallet-session-change", syncSession);
-      window.removeEventListener("sangowallet-network-change", syncNetwork);
-    };
-  }, []);
 
   const handleUnlock = async () => {
     setLoading(true);
@@ -161,6 +142,45 @@ export default function Dashboard() {
     },
     [currentNetworkId],
   );
+
+  useEffect(() => {
+    const syncSession = () => {
+      const sessionWallet = getSessionWallet();
+      setWalletData(sessionWallet);
+
+      if (!sessionWallet) {
+        setBalances({});
+        setError("");
+        setPassword("");
+      }
+    };
+
+    const handleWalletChanged = (event) => {
+      const { wallet } = event.detail || {};
+      if (wallet) {
+        setWalletData(wallet);
+        // Force rechargement des balances au changement de wallet
+        void fetchBalances(wallet);
+      }
+    };
+
+    const syncNetwork = () => {
+      setCurrentNetworkId(getCurrentNetwork().id);
+    };
+
+    window.addEventListener("sangowallet-session-change", syncSession);
+    window.addEventListener("sangowallet-wallet-changed", handleWalletChanged);
+    window.addEventListener("sangowallet-network-change", syncNetwork);
+
+    return () => {
+      window.removeEventListener("sangowallet-session-change", syncSession);
+      window.removeEventListener(
+        "sangowallet-wallet-changed",
+        handleWalletChanged,
+      );
+      window.removeEventListener("sangowallet-network-change", syncNetwork);
+    };
+  }, [fetchBalances]);
 
   useEffect(() => {
     if (walletData) {
@@ -306,17 +326,12 @@ export default function Dashboard() {
             key={`${token.address}-${currentNetworkId}`}
             name={token.name}
             symbol={token.symbol}
-            logo={
-              token.logo ||
-              "https://upload.wikimedia.org/wikipedia/commons/3/36/Emoji_u1f4b0.svg"
-            }
+            logo={token.logo || null}
             balance={token.balance || "0"}
             price={0}
-            decimals={4}
+            // decimals={typeof token.decimals === "number" ? token.decimals : 4}
             onClick={() =>
-              navigate(
-                `/send?tokenAddress=${encodeURIComponent(token.address)}&symbol=${encodeURIComponent(token.symbol)}`,
-              )
+              navigate(`/history/${encodeURIComponent(token.address)}`)
             }
           />
         ))}

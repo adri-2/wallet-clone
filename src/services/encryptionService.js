@@ -15,6 +15,15 @@ const emitSessionChange = () => {
   }
 };
 
+const emitWalletChanged = (wallet) => {
+  if (typeof window !== "undefined") {
+    const event = new CustomEvent("sangowallet-wallet-changed", {
+      detail: { wallet },
+    });
+    window.dispatchEvent(event);
+  }
+};
+
 // Charger session au démarrage
 if (typeof window !== "undefined") {
   try {
@@ -224,6 +233,7 @@ export const setSessionWallet = (wallet) => {
   }
 
   emitSessionChange();
+  emitWalletChanged(wallet);
 };
 
 export const setSessionPassword = (password) => {

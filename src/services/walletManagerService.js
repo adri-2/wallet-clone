@@ -43,6 +43,15 @@ export const switchWallet = (password, walletId) => {
   }
 
   setSessionWallet(wallet);
+
+  // Dispatch custom event avec les details du nouveau wallet
+  if (typeof window !== "undefined") {
+    const event = new CustomEvent("sangowallet-wallet-switched", {
+      detail: { walletId, wallet },
+    });
+    window.dispatchEvent(event);
+  }
+
   return wallet;
 };
 

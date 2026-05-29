@@ -1,12 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSessionWallet } from "../services/encryptionService";
 import { getTransactionHistoryForCrypto } from "../services/historyService";
 import TransactionDetailsModal from "../components/TransactionDetailsModal";
 import {
   canUseEtherscanHistory,
+  fetchTokenHistory,
   fetchOnChainHistory,
 } from "../services/etherscanHistoryService";
+import {
+  getAllTokensForWallet,
+  getTokenBalance,
+} from "../services/tokenService";
+import { getCurrentNetwork } from "../services/networkService";
 import { getEthBalance, getUsdtBalance } from "../services/ethService";
 import { getSolBalance } from "../services/solService";
 import { getBtcBalance } from "../services/btcService";
@@ -31,12 +37,6 @@ const cryptoConfig = {
   },
 };
 
-// const formatDate = (isoDate) =>
-//   new Date(isoDate).toLocaleString("fr-FR", {
-//     dateStyle: "medium",
-//     timeStyle: "short",
-//   });
-
 const getDirectionLabel = (transaction) =>
   transaction.direction === "received" ? "Reçu" : "Envoyé";
 
@@ -56,61 +56,75 @@ export default function History() {
   const { symbol } = useParams();
   const navigate = useNavigate();
   const walletData = getSessionWallet();
-  const cryptoSymbol = symbol?.toUpperCase() || "ETH";
-  const crypto = cryptoConfig[cryptoSymbol] || cryptoConfig.ETH;
-  const walletAddress =
-    cryptoSymbol === "BTC"
-      ? walletData?.btcAddress
-      : cryptoSymbol === "SOL"
-        ? walletData?.solAddress
-        : walletData?.ethAddress;
+  const networkId = getCurrentNetwork().id;
+  const requested = (symbol || "").toString();
+  const paramUpper = requested.toUpperCase() || "ETH";
 
+  // tokenInfo is derived from stored tokens for the current wallet/network
+  const tokenInfo = useMemo(() => {
+    if (!walletData) return null;
+    const allTokens =
+      getAllTokensForWallet(walletData?.ethAddress, networkId) || [];
+    const byAddress = allTokens.find(
+      (t) => t.address?.toLowerCase() === requested.toLowerCase(),
+    );
+    const bySymbol = allTokens.find(
+      (t) => (t.symbol || "").toLowerCase() === requested.toLowerCase(),
+    );
+    return byAddress || bySymbol || null;
+  }, [requested, walletData, networkId]);
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(Boolean(walletAddress));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [balance, setBalance] = useState(null);
   const [priceUsd, setPriceUsd] = useState(0);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
-
   const [openModal, setOpenModal] = useState(false);
-  useEffect(() => {
-    const syncSession = () => {
-      if (!getSessionWallet()) {
-        navigate("/dashboard", { replace: true });
-      }
-    };
-
-    window.addEventListener("sangowallet-session-change", syncSession);
-
-    return () => {
-      window.removeEventListener("sangowallet-session-change", syncSession);
-    };
-  }, [navigate]);
-
-  const handleOpenTransaction = (transaction) => {
-    setSelectedTransaction(transaction);
-    setOpenModal(true);
-  };
 
   useEffect(() => {
-    if (!walletAddress) {
-      return;
+    if (!walletData) {
+      navigate("/dashboard");
     }
-    const loadBalance = async () => {
-      try {
-        let b = "0";
-        if (cryptoSymbol === "ETH") {
-          b = await getEthBalance(walletAddress);
-        } else if (cryptoSymbol === "USDT") {
-          b = await getUsdtBalance(walletAddress);
-        } else if (cryptoSymbol === "SOL") {
-          b = await getSolBalance(walletAddress);
-        } else if (cryptoSymbol === "BTC") {
-          b = await getBtcBalance(walletAddress);
-        }
+  }, [walletData, navigate]);
 
+  useEffect(() => {
+    if (!walletData) return;
+
+    const effectiveToken = tokenInfo;
+    const effectiveSymbol = effectiveToken ? effectiveToken.symbol : paramUpper;
+    const effectiveWalletAddress = effectiveToken
+      ? walletData?.ethAddress
+      : effectiveSymbol === "BTC"
+        ? walletData?.btcAddress
+        : effectiveSymbol === "SOL"
+          ? walletData?.solAddress
+          : walletData?.ethAddress;
+
+    if (!effectiveWalletAddress) return;
+
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        // balance
+        let b = "0";
+        if (effectiveToken) {
+          b = await getTokenBalance(
+            effectiveToken.address,
+            effectiveWalletAddress,
+          );
+        } else if (effectiveSymbol === "ETH") {
+          b = await getEthBalance(effectiveWalletAddress);
+        } else if (effectiveSymbol === "USDT") {
+          b = await getUsdtBalance(effectiveWalletAddress);
+        } else if (effectiveSymbol === "SOL") {
+          b = await getSolBalance(effectiveWalletAddress);
+        } else if (effectiveSymbol === "BTC") {
+          b = await getBtcBalance(effectiveWalletAddress);
+        }
         setBalance(b);
-        // fetch price for selected crypto
+
+        // price
         try {
           const prices = await getCryptoPrices();
           const map = {
@@ -119,98 +133,119 @@ export default function History() {
             SOL: prices.sol,
             USDT: prices.usdt,
           };
-          setPriceUsd(map[cryptoSymbol] || 0);
+          setPriceUsd(
+            effectiveToken
+              ? prices[(effectiveToken.symbol || "").toLowerCase()] || 0
+              : map[effectiveSymbol] || 0,
+          );
         } catch (pErr) {
           console.error("Erreur recuperation prix:", pErr);
           setPriceUsd(0);
         }
-      } catch (err) {
-        console.error("Erreur balance:", err);
-        setBalance(null);
-      }
-    };
 
-    void loadBalance();
-
-    const loadHistory = async () => {
-      setLoading(true);
-      setError("");
-
-      try {
-        if (canUseEtherscanHistory(cryptoSymbol)) {
-          const onChainHistory = await fetchOnChainHistory({
-            address: walletAddress,
-            symbol: cryptoSymbol,
+        // history
+        if (effectiveToken) {
+          const tokenHistory = await fetchTokenHistory({
+            address: effectiveWalletAddress,
+            tokenAddress: effectiveToken.address,
+            symbol: effectiveToken.symbol,
           });
 
-          setTransactions(onChainHistory);
+          setTransactions(
+            tokenHistory.length > 0
+              ? tokenHistory
+              : getTransactionHistoryForCrypto(effectiveToken.symbol),
+          );
+        } else if (canUseEtherscanHistory(effectiveSymbol)) {
+          const onChain = await fetchOnChainHistory({
+            address: effectiveWalletAddress,
+            symbol: effectiveSymbol,
+          });
+          setTransactions(onChain);
         } else {
-          setTransactions(getTransactionHistoryForCrypto(cryptoSymbol));
-          if (cryptoSymbol === "BTC" || cryptoSymbol === "SOL") {
+          setTransactions(getTransactionHistoryForCrypto(effectiveSymbol));
+          if (effectiveSymbol === "BTC" || effectiveSymbol === "SOL") {
             setError(
               "Historique Etherscan disponible uniquement pour les actifs EVM. Affichage de l'historique local.",
             );
           }
         }
-      } catch (loadError) {
-        setTransactions(getTransactionHistoryForCrypto(cryptoSymbol));
-        setError(loadError.message || "Erreur de chargement de l'historique");
+      } catch (err) {
+        console.error(err);
+        setError(err?.message || "Erreur de chargement");
+        setTransactions(getTransactionHistoryForCrypto(effectiveSymbol));
       } finally {
         setLoading(false);
       }
     };
 
-    void loadHistory();
-  }, [cryptoSymbol, walletAddress]);
+    void load();
+  }, [tokenInfo, requested, paramUpper, walletData, networkId]);
 
-  if (!walletData) {
-    navigate("/dashboard");
-    return null;
-  }
+  const handleOpenTransaction = (tx) => {
+    setSelectedTransaction(tx);
+    setOpenModal(true);
+  };
 
+  const effectiveSymbol = tokenInfo ? tokenInfo.symbol : paramUpper;
+  const crypto = tokenInfo
+    ? { name: tokenInfo.name, logo: tokenInfo.logo || null }
+    : cryptoConfig[effectiveSymbol] || cryptoConfig.ETH;
   const displayError =
-    error || (!walletAddress ? "Adresse du wallet indisponible" : "");
+    error || (!walletData ? "Adresse du wallet indisponible" : "");
 
   return (
     <div className="flex flex-col gap-6 p-4 pb-8 ">
       <div className="flex flex-col gap-2">
         <div className="flex  justify-start gap-3">
-          <img src={crypto.logo} alt={cryptoSymbol} className="w-12 h-12" />
-          <h1 className="text-3xl font-bold"> {cryptoSymbol}</h1>
+          {crypto.logo ? (
+            <img src={crypto.logo} alt={effectiveSymbol} className="w-12 h-12" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+              {effectiveSymbol?.slice(0, 2) || "?"}
+            </div>
+          )}
+          <h1 className="text-3xl font-bold"> {effectiveSymbol}</h1>
           <p className="text-sm text-gray-500">{crypto.name}</p>
         </div>
 
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-          {/* prix en dollars */}
           <p className="font-bold text-2xl  text-gray-900">
             ${((parseFloat(balance || 0) || 0) * (priceUsd || 0)).toFixed(2)}
           </p>
-
-          {/* prix en crypto */}
           <p className="text-xl text-gray-500 mt-2">
-            {/* Solde:{" "} */}
             {balance === null
               ? "—"
-              : `${parseFloat(balance).toFixed(6)} ${cryptoSymbol}`}
+              : `${parseFloat(balance).toFixed(6)} ${effectiveSymbol}`}
           </p>
         </div>
+
         <div className=" p-2 flex items-center justify-center  gap-8">
           <div>
             <button
               className="px-6 py-2 bg-violet-600 text-white rounded-lg text-lg cursor-pointer hover:bg-violet-700 transition"
               onClick={() =>
-                navigate("/send", { state: { symbol: cryptoSymbol } })
+                navigate("/send", {
+                  state: {
+                    symbol: effectiveSymbol,
+                    tokenAddress: tokenInfo?.address,
+                  },
+                })
               }
             >
               Envoyer
             </button>
           </div>
-          {/*  */}
           <div>
             <button
               className="px-6 py-2 bg-gray-200 rounded-lg text-lg cursor-pointer hover:bg-gray-300 transition"
               onClick={() =>
-                navigate("/receive", { state: { symbol: cryptoSymbol } })
+                navigate("/receive", {
+                  state: {
+                    symbol: effectiveSymbol,
+                    tokenAddress: tokenInfo?.address,
+                  },
+                })
               }
             >
               Recevoir
@@ -245,25 +280,17 @@ export default function History() {
         </div>
       ) : transactions.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500">
-          Aucune transaction enregistrée pour {cryptoSymbol}.
+          Aucune transaction enregistrée pour {effectiveSymbol}.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto max-h-100 pr-1 scrollbar-none">
           {transactions.map((transaction) => (
             <div
               key={transaction.id}
               onClick={() => handleOpenTransaction(transaction)}
-              className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm cursor-pointer hover:border-violet-400 transition"
+              className="bg-gray-200 border border-gray-300 rounded-xl p-4 shadow-sm cursor-pointer hover:border-violet-400 transition"
             >
               <div className="flex items-center justify-between gap-4 mb-3">
-                {/* <div>
-                  <p className="font-bold text-gray-900">
-                    {transaction.amount} {transaction.symbol}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {formatDate(transaction.createdAt)}
-                  </p>
-                </div> */}
                 <span
                   className={`px-3 py-1 rounded-full text-lg font-semibold ${getDirectionTone(transaction)}`}
                 >
@@ -293,11 +320,6 @@ export default function History() {
                     </span>
                   </p>
                 )}
-
-                {/* <p>
-                  <span className="font-semibold text-gray-800">Hash :</span>{" "}
-                  <span className="break-all">{transaction.hash}</span>
-                </p> */}
               </div>
             </div>
           ))}

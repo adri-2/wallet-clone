@@ -35,8 +35,8 @@ export default function TransactionDetailsModal({
   const network = networkMap[transaction.symbol] || transaction.symbol;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center  bg-black/50 md:items-center overflow-y-auto scrollbar-hidden">
-      <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl p-5 h-[550px] overflow-y-auto scrollbar-hidden  mt-4 animate-in slide-in-from-bottom duration-300">
+    <div className="fixed inset-0 z-50 flex items-end justify-center  bg-black/50 md:items-center overflow-y-auto scrollbar-none">
+      <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl p-5 h-[550px] overflow-y-auto scrollbar-none  mt-4 animate-in slide-in-from-bottom duration-300">
         {/* HEADER */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-bold">Détails Transaction</h2>

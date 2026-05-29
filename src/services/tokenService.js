@@ -82,11 +82,13 @@ export const fetchTokenInfo = async (tokenAddress) => {
     const provider = getProvider();
     const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
 
-    const [name, symbol, decimals] = await Promise.all([
+    const [name, symbol, decimalsRaw] = await Promise.all([
       contract.name(),
       contract.symbol(),
       contract.decimals(),
     ]);
+
+    const decimals = Number(decimalsRaw);
 
     return {
       address: tokenAddress,
@@ -100,6 +102,7 @@ export const fetchTokenInfo = async (tokenAddress) => {
     console.error("Erreur récupération token:", error);
     throw new Error(
       "Impossible de récupérer les informations du token. Vérifiez l'adresse.",
+      { cause: error },
     );
   }
 };
@@ -110,10 +113,12 @@ export const getTokenBalance = async (tokenAddress, walletAddress) => {
     const provider = getProvider();
     const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
 
-    const [balance, decimals] = await Promise.all([
+    const [balance, decimalsRaw] = await Promise.all([
       contract.balanceOf(walletAddress),
       contract.decimals(),
     ]);
+
+    const decimals = Number(decimalsRaw);
 
     return ethers.formatUnits(balance, decimals);
   } catch (error) {
@@ -133,7 +138,8 @@ export const sendToken = async (
   const wallet = new ethers.Wallet(privateKey, provider);
   const contract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
 
-  const decimals = await contract.decimals();
+  const decimalsRaw = await contract.decimals();
+  const decimals = Number(decimalsRaw);
   const amountWithDecimals = ethers.parseUnits(amount, decimals);
 
   const tx = await contract.transfer(toAddress, amountWithDecimals);

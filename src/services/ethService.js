@@ -8,9 +8,7 @@ const ETH_RPC_URLS = [
   "https://cloudflare-eth.com",
 ];
 const SEPOLIA_RPC_URLS = [
-  "https://rpc.sepolia.org",
-  "https://eth-sepolia.g.alchemy.com/v2/demo",
-  "https://sepolia.drpc.org",
+  "https://sepolia.infura.io/v3/2908eac17cbe4bdc8ae9214bec039bd0",
 ];
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const USDT_ABI = [

@@ -14,7 +14,15 @@ const cryptoConfig = {
   SOL: { action: null },
 };
 
-const buildUrl = ({ address, symbol }) => {
+const DEFAULT_PAGE_SIZE = 100;
+const DEFAULT_MAX_PAGES = 20;
+
+const buildUrl = ({
+  address,
+  symbol,
+  page = 1,
+  offset = DEFAULT_PAGE_SIZE,
+}) => {
   const config = cryptoConfig[symbol];
   const chainId =
     getCurrentNetwork()?.chainId ||
@@ -30,8 +38,8 @@ const buildUrl = ({ address, symbol }) => {
     module: "account",
     action: config.action,
     address,
-    page: "1",
-    offset: "20",
+    page: String(page),
+    offset: String(offset),
     sort: "desc",
     apikey: API_KEY,
   });
@@ -43,15 +51,48 @@ const buildUrl = ({ address, symbol }) => {
   return `${BASE_URL}?${params.toString()}`;
 };
 
-const normalizeTx = (item, symbol, walletAddress) => {
-  const isTokenTx = symbol === "USDT";
-  const decimals = isTokenTx ? Number(item.tokenDecimal || 6) : 18;
+const buildTokenUrl = ({
+  address,
+  tokenAddress,
+  page = 1,
+  offset = DEFAULT_PAGE_SIZE,
+}) => {
+  const chainId =
+    getCurrentNetwork()?.chainId ||
+    import.meta.env.VITE_ETHERSCAN_CHAIN_ID ||
+    "1";
+
+  if (!API_KEY || !tokenAddress) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    chainid: String(chainId),
+    module: "account",
+    action: "tokentx",
+    address,
+    contractaddress: tokenAddress,
+    page: String(page),
+    offset: String(offset),
+    sort: "desc",
+    apikey: API_KEY,
+  });
+
+  return `${BASE_URL}?${params.toString()}`;
+};
+
+const normalizeTx = (
+  item,
+  symbol,
+  walletAddress,
+  { isTokenTx = false } = {},
+) => {
+  const decimals = isTokenTx ? Number(item.tokenDecimal || 18) : 18;
   const amount = isTokenTx
     ? ethers.formatUnits(item.value || "0", decimals)
     : ethers.formatEther(item.value || "0");
   const wallet = walletAddress?.toLowerCase();
   const from = item.from?.toLowerCase();
-  const to = item.to?.toLowerCase();
   const direction = wallet && from === wallet ? "sent" : "received";
 
   return {
@@ -70,31 +111,74 @@ const normalizeTx = (item, symbol, walletAddress) => {
   };
 };
 
-export const fetchOnChainHistory = async ({ address, symbol }) => {
-  const url = buildUrl({ address, symbol });
+const fetchPagedItems = async (
+  buildPageUrl,
+  normalize,
+  { maxPages = DEFAULT_MAX_PAGES, pageSize = DEFAULT_PAGE_SIZE } = {},
+) => {
+  const results = [];
 
-  if (!url) {
+  for (let page = 1; page <= maxPages; page += 1) {
+    const url = buildPageUrl({ page, offset: pageSize });
+    if (!url) {
+      break;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Impossible de récupérer l'historique Etherscan");
+    }
+
+    const payload = await response.json();
+    if (!payload || payload.status === "0") {
+      const message = String(payload?.message || "");
+      if (message.toLowerCase().includes("no transactions found")) {
+        break;
+      }
+
+      throw new Error(
+        payload?.result || message || "Réponse Etherscan invalide",
+      );
+    }
+
+    const items = Array.isArray(payload.result) ? payload.result : [];
+    if (items.length === 0) {
+      break;
+    }
+
+    results.push(...items.map(normalize));
+
+    if (items.length < pageSize) {
+      break;
+    }
+  }
+
+  return results;
+};
+
+export const fetchOnChainHistory = async ({ address, symbol }) => {
+  if (!API_KEY) {
     return [];
   }
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Impossible de récupérer l'historique Etherscan");
+  return fetchPagedItems(
+    ({ page, offset }) => buildUrl({ address, symbol, page, offset }),
+    (item) => normalizeTx(item, symbol, address),
+  );
+};
+
+export const fetchTokenHistory = async ({ address, tokenAddress, symbol }) => {
+  if (!API_KEY || !tokenAddress) {
+    return [];
   }
 
-  const payload = await response.json();
+  const tokenSymbol = symbol || "TOKEN";
 
-  if (!payload || payload.status === "0") {
-    const message = String(payload?.message || "");
-    if (message.toLowerCase().includes("no transactions found")) {
-      return [];
-    }
-
-    throw new Error(payload?.result || message || "Réponse Etherscan invalide");
-  }
-
-  const items = Array.isArray(payload.result) ? payload.result : [];
-  return items.map((item) => normalizeTx(item, symbol, address));
+  return fetchPagedItems(
+    ({ page, offset }) =>
+      buildTokenUrl({ address, tokenAddress, page, offset }),
+    (item) => normalizeTx(item, tokenSymbol, address, { isTokenTx: true }),
+  );
 };
 
 export const canUseEtherscanHistory = (symbol) => {
