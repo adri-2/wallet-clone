@@ -1,9 +1,16 @@
+//services/ethService.js
 import { ethers } from "ethers";
+import { getCurrentNetwork } from "./networkService";
 
 const ETH_RPC_URLS = [
   "https://ethereum-rpc.publicnode.com",
   "https://rpc.ankr.com/eth",
   "https://cloudflare-eth.com",
+];
+const SEPOLIA_RPC_URLS = [
+  "https://rpc.sepolia.org",
+  "https://eth-sepolia.g.alchemy.com/v2/demo",
+  "https://sepolia.drpc.org",
 ];
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const USDT_ABI = [
@@ -11,8 +18,18 @@ const USDT_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
 ];
 
+const getRpcUrls = () => {
+  const network = getCurrentNetwork();
+
+  if (network.chainId === 11155111) {
+    return SEPOLIA_RPC_URLS;
+  }
+
+  return ETH_RPC_URLS;
+};
+
 const getWorkingProvider = async () => {
-  for (const rpcUrl of ETH_RPC_URLS) {
+  for (const rpcUrl of getRpcUrls()) {
     try {
       const provider = new ethers.JsonRpcProvider(rpcUrl);
       await provider.getBlockNumber();
@@ -40,6 +57,12 @@ export const getEthBalance = async (address) => {
 // Balance USDT
 export const getUsdtBalance = async (address) => {
   try {
+    const network = getCurrentNetwork();
+
+    if (network.chainId !== 1) {
+      return "0";
+    }
+
     const provider = await getWorkingProvider();
     const contract = new ethers.Contract(USDT_CONTRACT, USDT_ABI, provider);
     const balance = await contract.balanceOf(address);
@@ -66,6 +89,12 @@ export const sendEth = async (privateKey, toAddress, amountEth) => {
 
 // Envoyer USDT
 export const sendUsdt = async (privateKey, toAddress, amountUsdt) => {
+  const network = getCurrentNetwork();
+
+  if (network.chainId !== 1) {
+    throw new Error("USDT est disponible uniquement sur Ethereum Mainnet");
+  }
+
   const provider = await getWorkingProvider();
   const wallet = new ethers.Wallet(privateKey, provider);
   const contract = new ethers.Contract(USDT_CONTRACT, USDT_ABI, wallet);

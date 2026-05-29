@@ -1,16 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   loadWallet,
   getSessionWallet,
   setSessionWallet,
-  getSessionPassword,
   setSessionPassword,
 } from "../services/encryptionService";
-import { getAllWallets, switchWallet } from "../services/walletManagerService";
 import { getEthBalance, getUsdtBalance } from "../services/ethService";
 import { getSolBalance } from "../services/solService";
 import { getCryptoPrices } from "../services/priceService";
+import {
+  getAllNetworks,
+  getCurrentNetwork,
+  switchNetwork,
+} from "../services/networkService";
+import {
+  getAllTokensForWallet,
+  getTokenBalance,
+} from "../services/tokenService";
 
 const CryptoCard = ({
   name,
@@ -51,19 +58,15 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const [prices, setPrices] = useState({ btc: 0, eth: 0, sol: 0, usdt: 0 });
-  const [walletOptions, setWalletOptions] = useState([]);
+  const [currentNetworkId, setCurrentNetworkId] = useState(
+    () => getCurrentNetwork().id,
+  );
+  const [customTokens, setCustomTokens] = useState([]);
 
   useEffect(() => {
     const syncSession = () => {
       const sessionWallet = getSessionWallet();
       setWalletData(sessionWallet);
-      const sessionPassword = getSessionPassword();
-
-      if (sessionPassword) {
-        setWalletOptions(getAllWallets(sessionPassword) || []);
-      } else {
-        setWalletOptions([]);
-      }
 
       if (!sessionWallet) {
         setBalances({});
@@ -72,10 +75,16 @@ export default function Dashboard() {
       }
     };
 
+    const syncNetwork = () => {
+      setCurrentNetworkId(getCurrentNetwork().id);
+    };
+
     window.addEventListener("sangowallet-session-change", syncSession);
+    window.addEventListener("sangowallet-network-change", syncNetwork);
 
     return () => {
       window.removeEventListener("sangowallet-session-change", syncSession);
+      window.removeEventListener("sangowallet-network-change", syncNetwork);
     };
   }, []);
 
@@ -90,65 +99,74 @@ export default function Dashboard() {
     setWalletData(data);
     setSessionWallet(data);
     setSessionPassword(password);
-    setWalletOptions(getAllWallets(password) || []);
     await fetchBalances(data);
     setLoading(false);
   };
 
-  const handleSwitchWallet = (walletId) => {
-    const sessionPassword = getSessionPassword() || password;
+  const handleNetworkChange = async (networkId) => {
+    setCurrentNetworkId(networkId);
+    const switched = await switchNetwork(networkId);
 
-    if (!sessionPassword) {
-      setError("Entrez d'abord le mot de passe maître pour changer de wallet");
-      return;
-    }
-
-    const nextWallet = switchWallet(sessionPassword, walletId);
-
-    if (!nextWallet) {
-      setError("Impossible de changer de wallet");
-      return;
-    }
-
-    setError("");
-    setPassword(sessionPassword);
-    setWalletData(nextWallet);
-  };
-
-  const fetchBalances = async (data) => {
-    try {
-      const [ethResult, usdtResult, solResult, cryptoPricesResult] =
-        await Promise.allSettled([
-          getEthBalance(data.ethAddress),
-          getUsdtBalance(data.ethAddress),
-          getSolBalance(data.solAddress),
-          getCryptoPrices(),
-        ]);
-
-      const nextBalances = {
-        eth: ethResult.status === "fulfilled" ? ethResult.value : "0",
-        usdt: usdtResult.status === "fulfilled" ? usdtResult.value : "0",
-        sol: solResult.status === "fulfilled" ? solResult.value : "0",
-        btc: "0",
-      };
-
-      const nextPrices =
-        cryptoPricesResult.status === "fulfilled"
-          ? cryptoPricesResult.value
-          : { btc: 0, eth: 0, sol: 0, usdt: 0 };
-
-      setBalances(nextBalances);
-      setPrices(nextPrices);
-    } catch (err) {
-      console.error("Erreur chargement balances", err);
+    if (!switched) {
+      setCurrentNetworkId(getCurrentNetwork().id);
     }
   };
+  const fetchBalances = useCallback(
+    async (data) => {
+      try {
+        const [ethResult, usdtResult, solResult, cryptoPricesResult] =
+          await Promise.allSettled([
+            getEthBalance(data.ethAddress),
+            getUsdtBalance(data.ethAddress),
+            getSolBalance(data.solAddress),
+            getCryptoPrices(),
+          ]);
+
+        const nextBalances = {
+          eth: ethResult.status === "fulfilled" ? ethResult.value : "0",
+          usdt: usdtResult.status === "fulfilled" ? usdtResult.value : "0",
+          sol: solResult.status === "fulfilled" ? solResult.value : "0",
+          btc: "0",
+        };
+
+        const nextPrices =
+          cryptoPricesResult.status === "fulfilled"
+            ? cryptoPricesResult.value
+            : { btc: 0, eth: 0, sol: 0, usdt: 0 };
+
+        setBalances(nextBalances);
+        setPrices(nextPrices);
+
+        const allTokens = getAllTokensForWallet(
+          data.ethAddress,
+          currentNetworkId,
+        );
+        const importedTokens = allTokens.filter((token) => token.isCustom);
+
+        const tokensWithBalances = await Promise.all(
+          importedTokens.map(async (token) => {
+            const balance = await getTokenBalance(
+              token.address,
+              data.ethAddress,
+            );
+            return { ...token, balance };
+          }),
+        );
+
+        setCustomTokens(tokensWithBalances);
+      } catch (err) {
+        console.error("Erreur chargement balances", err);
+        setCustomTokens([]);
+      }
+    },
+    [currentNetworkId],
+  );
 
   useEffect(() => {
     if (walletData) {
       void fetchBalances(walletData);
     }
-  }, [walletData]);
+  }, [walletData, fetchBalances]);
 
   if (!walletData) {
     return (
@@ -201,33 +219,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
-      <div className="bg-white/90 rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-gray-700">
-            Changer de wallet
-          </label>
-          <select
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-            value={walletData?.id || ""}
-            onChange={(e) => handleSwitchWallet(e.target.value)}
-            disabled={walletOptions.length === 0}
-          >
-            {walletOptions.length === 0 ? (
-              <option value="">Aucun wallet disponible</option>
-            ) : (
-              walletOptions.map((wallet) => (
-                <option key={wallet.id} value={wallet.id}>
-                  {wallet.name}
-                </option>
-              ))
-            )}
-          </select>
-          <p className="text-xs text-gray-500">
-            Sélectionne un wallet pour basculer immédiatement dessus.
-          </p>
-        </div>
-      </div>
-
       <div className="bg-linear-to-r from-violet-600 to-pink-500 text-white p-6 rounded-xl shadow-lg">
         <p className="text-sm opacity-90 mb-2">Solde Total</p>
         <h1 className="text-4xl font-bold">${totalUsd.toFixed(2)}</h1>
@@ -246,6 +237,30 @@ export default function Dashboard() {
         >
           Recevoir
         </button>
+      </div>
+
+      <button
+        className="w-full bg-gray-900 hover:bg-black px-4 py-3 rounded-lg text-white font-bold cursor-pointer transition shadow-md"
+        onClick={() => navigate("/import-token")}
+      >
+        Importer un token
+      </button>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <label className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          Réseau:
+          <select
+            value={currentNetworkId}
+            onChange={(event) => handleNetworkChange(event.target.value)}
+            className="bg-white text-gray-900 rounded-md px-3 py-2 font-semibold focus:outline-none border border-gray-300"
+          >
+            {getAllNetworks().map((network) => (
+              <option key={network.id} value={network.id}>
+                {network.icon} {network.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="space-y-3">
@@ -285,6 +300,26 @@ export default function Dashboard() {
           decimals={4}
           onClick={() => navigate("/history/SOL")}
         />
+
+        {customTokens.map((token) => (
+          <CryptoCard
+            key={`${token.address}-${currentNetworkId}`}
+            name={token.name}
+            symbol={token.symbol}
+            logo={
+              token.logo ||
+              "https://upload.wikimedia.org/wikipedia/commons/3/36/Emoji_u1f4b0.svg"
+            }
+            balance={token.balance || "0"}
+            price={0}
+            decimals={4}
+            onClick={() =>
+              navigate(
+                `/send?tokenAddress=${encodeURIComponent(token.address)}&symbol=${encodeURIComponent(token.symbol)}`,
+              )
+            }
+          />
+        ))}
       </div>
     </div>
   );

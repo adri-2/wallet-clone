@@ -11,7 +11,6 @@ import {
   setSessionWallet,
   setSessionPassword,
   getSessionPassword,
-  walletExists,
 } from "../services/encryptionService";
 
 export default function CreateWallet() {
@@ -27,7 +26,7 @@ export default function CreateWallet() {
 
   const navigate = useNavigate();
   const masterPassword = getSessionPassword();
-  const needsInitialPassword = !masterPassword && !walletExists();
+  const needsPassword = !masterPassword;
 
   // =========================
   // STEP 1
@@ -49,6 +48,8 @@ export default function CreateWallet() {
 
   const handleSaveWallet = () => {
     setError("");
+
+    const normalizedSeedPhrase = seedPhrase.trim();
 
     const effectivePassword = masterPassword || password;
 
@@ -72,10 +73,10 @@ export default function CreateWallet() {
     }
 
     try {
-      const wallets = deriveAllWallets(seedPhrase);
+      const wallets = deriveAllWallets(normalizedSeedPhrase);
 
       const walletData = {
-        seedPhrase,
+        seedPhrase: normalizedSeedPhrase,
         address: wallets.ethAddress,
 
         ...wallets,
@@ -98,8 +99,10 @@ export default function CreateWallet() {
       setSessionPassword(effectivePassword);
 
       navigate("/dashboard");
-    } catch {
-      setError("Erreur création wallet");
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Erreur création wallet",
+      );
     }
   };
 
@@ -190,19 +193,13 @@ export default function CreateWallet() {
             </div>
           ) : (
             <>
-              {!needsInitialPassword && (
-                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg text-sm">
-                  Déverrouille d'abord le dashboard pour réutiliser le mot de
-                  passe maître existant.
-                </div>
-              )}
               <input
                 type="password"
                 placeholder="Mot de passe maître"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="border border-gray-300 p-3 rounded-lg bg-gray-50"
-                disabled={!needsInitialPassword}
+                disabled={!needsPassword}
               />
               <input
                 type="password"
@@ -210,7 +207,7 @@ export default function CreateWallet() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="border border-gray-300 p-3 rounded-lg bg-gray-50"
-                disabled={!needsInitialPassword}
+                disabled={!needsPassword}
               />
             </>
           )}

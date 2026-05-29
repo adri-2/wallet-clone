@@ -9,7 +9,6 @@ import {
   setSessionWallet,
   setSessionPassword,
   getSessionPassword,
-  walletExists,
 } from "../services/encryptionService";
 
 export default function ImportWallet() {
@@ -18,10 +17,12 @@ export default function ImportWallet() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const masterPassword = getSessionPassword();
-  const needsInitialPassword = !masterPassword && !walletExists();
+  const needsPassword = !masterPassword;
 
   const handleImport = () => {
-    if (!validateSeedPhrase(seedInput)) {
+    const normalizedSeed = seedInput.trim();
+
+    if (!validateSeedPhrase(normalizedSeed)) {
       setError("Veuillez entrer exactement 12 mots");
       return;
     }
@@ -39,9 +40,9 @@ export default function ImportWallet() {
     }
 
     try {
-      const wallets = deriveAllWallets(seedInput);
+      const wallets = deriveAllWallets(normalizedSeed);
       const walletData = {
-        seedPhrase: seedInput,
+        seedPhrase: normalizedSeed,
         address: wallets.ethAddress,
         ...wallets,
         createdAt: new Date().toISOString(),
@@ -61,8 +62,8 @@ export default function ImportWallet() {
       });
       setSessionPassword(effectivePassword);
       navigate("/dashboard");
-    } catch {
-      setError("Seed phrase invalide");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Seed phrase invalide");
     }
   };
 
@@ -85,19 +86,13 @@ export default function ImportWallet() {
           </div>
         ) : (
           <>
-            {!needsInitialPassword && (
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg text-sm">
-                Déverrouille d'abord le dashboard pour réutiliser le mot de
-                passe maître existant.
-              </div>
-            )}
             <input
               type="password"
               placeholder="Mot de passe maître"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="border border-gray-300 p-3 rounded-lg bg-gray-50"
-              disabled={!needsInitialPassword}
+              disabled={!needsPassword}
             />
           </>
         )}

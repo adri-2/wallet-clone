@@ -2,10 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSessionWallet } from "../services/encryptionService";
 import { getTransactionHistoryForCrypto } from "../services/historyService";
+import TransactionDetailsModal from "../components/TransactionDetailsModal";
 import {
   canUseEtherscanHistory,
   fetchOnChainHistory,
 } from "../services/etherscanHistoryService";
+import { getEthBalance, getUsdtBalance } from "../services/ethService";
+import { getSolBalance } from "../services/solService";
+import { getBtcBalance } from "../services/btcService";
+import { getCryptoPrices } from "../services/priceService";
 
 const cryptoConfig = {
   BTC: {
@@ -26,11 +31,11 @@ const cryptoConfig = {
   },
 };
 
-const formatDate = (isoDate) =>
-  new Date(isoDate).toLocaleString("fr-FR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+// const formatDate = (isoDate) =>
+//   new Date(isoDate).toLocaleString("fr-FR", {
+//     dateStyle: "medium",
+//     timeStyle: "short",
+//   });
 
 const getDirectionLabel = (transaction) =>
   transaction.direction === "received" ? "Reçu" : "Envoyé";
@@ -39,6 +44,13 @@ const getDirectionTone = (transaction) =>
   transaction.direction === "received"
     ? "bg-emerald-50 text-emerald-700"
     : "bg-amber-50 text-amber-700";
+
+const maskAddress = (addr) => {
+  if (!addr) return "-";
+  const s = String(addr);
+  if (s.length <= 12) return s;
+  return `${s.slice(0, 6)}...${s.slice(-4)}`;
+};
 
 export default function History() {
   const { symbol } = useParams();
@@ -56,7 +68,11 @@ export default function History() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(Boolean(walletAddress));
   const [error, setError] = useState("");
+  const [balance, setBalance] = useState(null);
+  const [priceUsd, setPriceUsd] = useState(0);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
 
+  const [openModal, setOpenModal] = useState(false);
   useEffect(() => {
     const syncSession = () => {
       if (!getSessionWallet()) {
@@ -71,10 +87,50 @@ export default function History() {
     };
   }, [navigate]);
 
+  const handleOpenTransaction = (transaction) => {
+    setSelectedTransaction(transaction);
+    setOpenModal(true);
+  };
+
   useEffect(() => {
     if (!walletAddress) {
       return;
     }
+    const loadBalance = async () => {
+      try {
+        let b = "0";
+        if (cryptoSymbol === "ETH") {
+          b = await getEthBalance(walletAddress);
+        } else if (cryptoSymbol === "USDT") {
+          b = await getUsdtBalance(walletAddress);
+        } else if (cryptoSymbol === "SOL") {
+          b = await getSolBalance(walletAddress);
+        } else if (cryptoSymbol === "BTC") {
+          b = await getBtcBalance(walletAddress);
+        }
+
+        setBalance(b);
+        // fetch price for selected crypto
+        try {
+          const prices = await getCryptoPrices();
+          const map = {
+            BTC: prices.btc,
+            ETH: prices.eth,
+            SOL: prices.sol,
+            USDT: prices.usdt,
+          };
+          setPriceUsd(map[cryptoSymbol] || 0);
+        } catch (pErr) {
+          console.error("Erreur recuperation prix:", pErr);
+          setPriceUsd(0);
+        }
+      } catch (err) {
+        console.error("Erreur balance:", err);
+        setBalance(null);
+      }
+    };
+
+    void loadBalance();
 
     const loadHistory = async () => {
       setLoading(true);
@@ -116,20 +172,51 @@ export default function History() {
     error || (!walletAddress ? "Adresse du wallet indisponible" : "");
 
   return (
-    <div className="flex flex-col gap-6 p-4 pb-8">
-      <div className="flex items-center gap-3">
-        <img src={crypto.logo} alt={cryptoSymbol} className="w-12 h-12" />
-        <div>
-          <h1 className="text-3xl font-bold">Historique {cryptoSymbol}</h1>
+    <div className="flex flex-col gap-6 p-4 pb-8 ">
+      <div className="flex flex-col gap-2">
+        <div className="flex  justify-start gap-3">
+          <img src={crypto.logo} alt={cryptoSymbol} className="w-12 h-12" />
+          <h1 className="text-3xl font-bold"> {cryptoSymbol}</h1>
           <p className="text-sm text-gray-500">{crypto.name}</p>
         </div>
-      </div>
 
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-1">Adresse du wallet</p>
-        <p className="font-mono text-xs break-all text-gray-800">
-          {walletAddress || "Adresse indisponible"}
-        </p>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+          {/* prix en dollars */}
+          <p className="font-bold text-2xl  text-gray-900">
+            ${((parseFloat(balance || 0) || 0) * (priceUsd || 0)).toFixed(2)}
+          </p>
+
+          {/* prix en crypto */}
+          <p className="text-xl text-gray-500 mt-2">
+            {/* Solde:{" "} */}
+            {balance === null
+              ? "—"
+              : `${parseFloat(balance).toFixed(6)} ${cryptoSymbol}`}
+          </p>
+        </div>
+        <div className=" p-2 flex items-center justify-center  gap-8">
+          <div>
+            <button
+              className="px-6 py-2 bg-violet-600 text-white rounded-lg text-lg cursor-pointer hover:bg-violet-700 transition"
+              onClick={() =>
+                navigate("/send", { state: { symbol: cryptoSymbol } })
+              }
+            >
+              Envoyer
+            </button>
+          </div>
+          {/*  */}
+          <div>
+            <button
+              className="px-6 py-2 bg-gray-200 rounded-lg text-lg cursor-pointer hover:bg-gray-300 transition"
+              onClick={() =>
+                navigate("/receive", { state: { symbol: cryptoSymbol } })
+              }
+            >
+              Recevoir
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center justify-between">
@@ -165,42 +252,63 @@ export default function History() {
           {transactions.map((transaction) => (
             <div
               key={transaction.id}
-              className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+              onClick={() => handleOpenTransaction(transaction)}
+              className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm cursor-pointer hover:border-violet-400 transition"
             >
               <div className="flex items-center justify-between gap-4 mb-3">
-                <div>
+                {/* <div>
                   <p className="font-bold text-gray-900">
                     {transaction.amount} {transaction.symbol}
                   </p>
                   <p className="text-xs text-gray-500">
                     {formatDate(transaction.createdAt)}
                   </p>
-                </div>
+                </div> */}
                 <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${getDirectionTone(transaction)}`}
+                  className={`px-3 py-1 rounded-full text-lg font-semibold ${getDirectionTone(transaction)}`}
                 >
                   {getDirectionLabel(transaction)}
                 </span>
               </div>
 
-              <div className="space-y-2 text-xs text-gray-600">
-                <p>
-                  <span className="font-semibold text-gray-800">De :</span>{" "}
-                  {transaction.from || transaction.toAddress || "-"}
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Vers :</span>{" "}
-                  {transaction.to || transaction.toAddress || "-"}
-                </p>
-                <p>
+              <div className="space-y-2 text-lg text-gray-600">
+                {transaction.direction === "received" ? (
+                  <p>
+                    <span className="font-semibold text-lg text-gray-800">
+                      De :
+                    </span>{" "}
+                    {maskAddress(transaction.from || transaction.toAddress)}
+                    <span className="ml-2 text-lg font-semibold">
+                      {transaction.amount} {transaction.symbol}
+                    </span>
+                  </p>
+                ) : (
+                  <p>
+                    <span className="font-semibold text-lg text-gray-800">
+                      Vers :
+                    </span>{" "}
+                    {maskAddress(transaction.to || transaction.toAddress)}
+                    <span className="ml-2 text-lg font-semibold">
+                      {transaction.amount} {transaction.symbol}
+                    </span>
+                  </p>
+                )}
+
+                {/* <p>
                   <span className="font-semibold text-gray-800">Hash :</span>{" "}
                   <span className="break-all">{transaction.hash}</span>
-                </p>
+                </p> */}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <TransactionDetailsModal
+        open={openModal}
+        onClose={() => setOpenModal(false)}
+        transaction={selectedTransaction}
+      />
     </div>
   );
 }

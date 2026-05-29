@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getSessionWallet } from "../services/encryptionService";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function Receive() {
+  const location = useLocation();
   const [walletData, setWalletData] = useState(getSessionWallet());
-  const [selectedCrypto, setSelectedCrypto] = useState("ETH");
+  const initialSymbol =
+    (location.state && location.state.symbol) ||
+    new URLSearchParams(location.search).get("symbol") ||
+    "ETH";
+  const [selectedCrypto, setSelectedCrypto] = useState(
+    () => initialSymbol || "ETH",
+  );
   const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
 
@@ -70,6 +77,9 @@ export default function Receive() {
             <option value="USDT">Tether (USDT) - ERC20</option>
             <option value="SOL">Solana (SOL)</option>
           </select>
+          <p className="text-xs text-gray-500 mt-2">
+            Sélection actuelle: {selectedCrypto}
+          </p>
         </div>
 
         {/* QR CODE */}

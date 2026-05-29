@@ -1,8 +1,8 @@
 import { ethers } from "ethers";
+import { getCurrentNetwork } from "./networkService";
 
 const API_KEY = import.meta.env.VITE_ETHERSCAN_API_KEY;
 const BASE_URL = "https://api.etherscan.io/v2/api";
-const DEFAULT_CHAIN_ID = import.meta.env.VITE_ETHERSCAN_CHAIN_ID || "1";
 const USDT_CONTRACT =
   import.meta.env.VITE_USDT_CONTRACT_ADDRESS ||
   "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -16,13 +16,17 @@ const cryptoConfig = {
 
 const buildUrl = ({ address, symbol }) => {
   const config = cryptoConfig[symbol];
+  const chainId =
+    getCurrentNetwork()?.chainId ||
+    import.meta.env.VITE_ETHERSCAN_CHAIN_ID ||
+    "1";
 
   if (!config?.action || !API_KEY) {
     return null;
   }
 
   const params = new URLSearchParams({
-    chainid: DEFAULT_CHAIN_ID,
+    chainid: String(chainId),
     module: "account",
     action: config.action,
     address,

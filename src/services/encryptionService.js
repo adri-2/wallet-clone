@@ -3,9 +3,11 @@ import CryptoJS from "crypto-js";
 const STORAGE_KEY = "sangowallet_wallets";
 const SESSION_KEY = "sangowallet_session";
 const SESSION_PASSWORD_KEY = "sangowallet_session_password";
+const SESSION_SELECTED_ASSET = "sangowallet_selected_asset";
 
 let sessionWallet = null;
 let sessionPassword = null;
+let sessionSelectedAsset = null;
 
 const emitSessionChange = () => {
   if (typeof window !== "undefined") {
@@ -19,9 +21,11 @@ if (typeof window !== "undefined") {
     const storedSession = sessionStorage.getItem(SESSION_KEY);
     sessionWallet = storedSession ? JSON.parse(storedSession) : null;
     sessionPassword = sessionStorage.getItem(SESSION_PASSWORD_KEY);
+    sessionSelectedAsset = sessionStorage.getItem(SESSION_SELECTED_ASSET);
   } catch {
     sessionWallet = null;
     sessionPassword = null;
+    sessionSelectedAsset = null;
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_PASSWORD_KEY);
   }
@@ -42,6 +46,22 @@ const getWallets = () => {
 
 const saveWallets = (wallets) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(wallets));
+};
+
+const generateWalletId = () => {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  const randomPart = () =>
+    Math.floor((1 + Math.random()) * 0x10000)
+      .toString(16)
+      .substring(1);
+
+  return `${randomPart()}${randomPart()}-${randomPart()}-${randomPart()}-${randomPart()}-${randomPart()}${randomPart()}${randomPart()}`;
 };
 
 //
@@ -81,7 +101,7 @@ export const saveWallet = (walletData, password) => {
   const encrypted = CryptoJS.AES.encrypt(jsonString, password).toString();
 
   const newWallet = {
-    id: crypto.randomUUID(),
+    id: generateWalletId(),
     name: walletData.name || `Compte ${wallets.length + 1}`,
     address: primaryAddress,
     ethAddress: walletData.ethAddress || primaryAddress,
@@ -211,6 +231,30 @@ export const setSessionPassword = (password) => {
 
   if (typeof window !== "undefined") {
     sessionStorage.setItem(SESSION_PASSWORD_KEY, password);
+  }
+
+  emitSessionChange();
+};
+
+export const setSelectedAsset = (symbol) => {
+  sessionSelectedAsset = symbol;
+
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(SESSION_SELECTED_ASSET, symbol);
+  }
+
+  emitSessionChange();
+};
+
+export const getSelectedAsset = () => {
+  return sessionSelectedAsset || "ETH";
+};
+
+export const clearSelectedAsset = () => {
+  sessionSelectedAsset = null;
+
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(SESSION_SELECTED_ASSET);
   }
 
   emitSessionChange();

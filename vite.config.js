@@ -4,6 +4,10 @@ import wasm from "vite-plugin-wasm";
 import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), wasm(), tailwindcss()],
+
+  server: {
+    allowedHosts: ["wally-circinate-dessie.ngrok-free.dev"],
+  },
   define: {
     global: "globalThis",
     "process.env": {},

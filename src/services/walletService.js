@@ -1,5 +1,6 @@
 //services/walletService.js
-import { generateMnemonic, mnemonicToSeedSync } from "bip39";
+import { Buffer } from "buffer";
+import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from "bip39";
 import { ethers } from "ethers";
 import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
@@ -9,6 +10,9 @@ import { Keypair } from "@solana/web3.js";
 
 const bip32 = BIP32Factory(ecc);
 
+const normalizeMnemonic = (mnemonic) =>
+  mnemonic.normalize("NFKD").trim().toLowerCase().replace(/\s+/g, " ");
+
 // Générer 12 mots
 export const generateSeedPhrase = () => {
   const mnemonic = generateMnemonic(128);
@@ -17,17 +21,22 @@ export const generateSeedPhrase = () => {
 
 // Valider une seed phrase
 export const validateSeedPhrase = (mnemonic) => {
-  const words = mnemonic.trim().split(/\s+/);
-  return words.length === 12;
+  const normalizedMnemonic = normalizeMnemonic(mnemonic);
+
+  return (
+    normalizedMnemonic.split(" ").length === 12 &&
+    validateMnemonic(normalizedMnemonic)
+  );
 };
 
 // Dériver tous les wallets depuis la seed
 export const deriveAllWallets = (mnemonic) => {
   try {
-    const seed = mnemonicToSeedSync(mnemonic);
+    const normalizedMnemonic = normalizeMnemonic(mnemonic);
+    const seed = mnemonicToSeedSync(normalizedMnemonic);
 
     // ETH (m/44'/60'/0'/0/0)
-    const ethMnemonic = ethers.Mnemonic.fromPhrase(mnemonic);
+    const ethMnemonic = ethers.Mnemonic.fromPhrase(normalizedMnemonic);
     const ethWallet = ethers.HDNodeWallet.fromMnemonic(
       ethMnemonic,
       "m/44'/60'/0'/0/0",
@@ -55,6 +64,6 @@ export const deriveAllWallets = (mnemonic) => {
     };
   } catch (error) {
     console.error("Erreur dérivation:", error);
-    throw new Error("Seed phrase invalide");
+    throw new Error("Seed phrase invalide", { cause: error });
   }
 };

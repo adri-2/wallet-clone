@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   getSessionWallet,
   setSessionWallet,
@@ -8,10 +8,20 @@ import { sendEth, sendUsdt } from "../services/ethService";
 import { sendSol } from "../services/solService";
 import { sendBtc } from "../services/btcService";
 import { addTransactionHistory } from "../services/historyService";
+import { sendToken } from "../services/tokenService";
 
 export default function Send() {
+  const location = useLocation();
   const [walletData, setWalletData] = useState(getSessionWallet());
-  const [crypto, setCrypto] = useState("ETH");
+  const initialSymbol =
+    (location.state && location.state.symbol) ||
+    new URLSearchParams(location.search).get("symbol") ||
+    "ETH";
+  const [crypto, setCrypto] = useState(() => initialSymbol || "ETH");
+  const tokenAddress =
+    (location.state && location.state.tokenAddress) ||
+    new URLSearchParams(location.search).get("tokenAddress") ||
+    "";
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,7 +76,17 @@ export default function Send() {
           hash = await sendSol(walletData.solSecretKey, toAddress, amount);
           break;
         default:
-          throw new Error("Crypto non supportée");
+          if (!tokenAddress) {
+            throw new Error("Adresse du token manquante");
+          }
+
+          hash = await sendToken(
+            tokenAddress,
+            walletData.ethPrivateKey,
+            toAddress,
+            amount,
+          );
+          break;
       }
 
       addTransactionHistory({
@@ -102,8 +122,26 @@ export default function Send() {
             <option value="ETH">Ethereum (ETH)</option>
             <option value="USDT">Tether (USDT)</option>
             <option value="SOL">Solana (SOL)</option>
+            {tokenAddress &&
+              !["BTC", "ETH", "USDT", "SOL"].includes(crypto) && (
+                <option value={crypto}>{crypto} (token importé)</option>
+              )}
           </select>
+          <p className="text-xs text-gray-500 mt-2">
+            Sélection actuelle: {crypto}
+          </p>
         </div>
+
+        {tokenAddress && (
+          <div className="bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm">
+            <div className="font-semibold text-gray-700 mb-1">
+              Token importé
+            </div>
+            <div className="font-mono text-xs break-all text-gray-600">
+              {tokenAddress}
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
